@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>starSpawnRate</key>
+	<real>0.2</real>
+	<key>enemySpawnRate</key>
+	<integer>2</integer>
+	<key>enemySpeed</key>
+	<real>1.6</real>
+	<key>projectileSpeed</key>
+	<real>0.9</real>
+	<key>fireProjectileRate</key>
+	<real>0.2</real>
+</dict>
+</plist>

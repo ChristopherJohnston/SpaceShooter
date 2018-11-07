@@ -11,14 +11,17 @@ import GameplayKit
 
 var player: SKSpriteNode?
 var projectile: SKSpriteNode?
-var enemy: SKSpriteNode?
+//var enemy: SKSpriteNode?
+var enemyXPositionRandomSource: GKRandomDistribution?
 var star: SKSpriteNode?
 
 var scoreLabel: SKLabelNode?
 var mainLabel: SKLabelNode?
 
 var starSize: CGSize?
-
+var starXPositionRandomSource: GKRandomDistribution?
+var starSpeedRandomSource: GKRandomDistribution?
+var starSizeRandomSource: GKRandomDistribution?
 
 var isAlive = true
 var score = 0
@@ -37,6 +40,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     var enemySpeed: Double = 0.0
     var enemySpawnRate: Double = 0.0
     var starSpawnRate: Double = 0.0
+    var minStarSpeed: Int = 2
+    var maxStarSpeed: Int = 10
+    var starDensity: Int = 12
+    var minStarSize: Int = 3
+    var maxStarSize: Int = 7
     
     var entities = [GKEntity]()
     var graphs = [String : GKGraph]()
@@ -58,6 +66,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         self.enemySpeed = (dict.object(forKey: "enemySpeed") as? Double)!
         self.enemySpawnRate = (dict.object(forKey: "enemySpawnRate") as? Double)!
         self.starSpawnRate = (dict.object(forKey: "starSpawnRate") as? Double)!
+        self.minStarSpeed = (dict.object(forKey: "minStarSpeed") as? Int)!
+        self.maxStarSpeed = (dict.object(forKey: "maxStarSpeed") as? Int)!
+        self.starDensity = (dict.object(forKey: "starDensity") as? Int)!
+        self.minStarSize = (dict.object(forKey: "minStarSize") as? Int)!
+        self.maxStarSize = (dict.object(forKey: "maxStarSize") as? Int)!
         
         player = self.childNode(withName: "player") as? SKSpriteNode
         player?.physicsBody?.categoryBitMask = physicsCategory.player
@@ -66,6 +79,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         mainLabel = self.childNode(withName: "mainLabel")  as? SKLabelNode
         scoreLabel = self.childNode(withName: "scoreLabel") as? SKLabelNode
         scoreLabel?.text = "Score: \(score)"
+        
+        starXPositionRandomSource = GKRandomDistribution(lowestValue: Int(self.frame.minX), highestValue: Int(self.frame.maxX))
+        starSpeedRandomSource = GKRandomDistribution(lowestValue: Int(self.minStarSpeed), highestValue: Int(self.maxStarSpeed))
+        starSizeRandomSource = GKRandomDistribution(lowestValue: 3, highestValue: 7)
+        enemyXPositionRandomSource = GKRandomDistribution(
+            lowestValue: Int(self.frame.minX),
+            highestValue: Int(self.frame.maxX)
+        )
 
         self.fireProjectile()
         self.timerSpawnEnemies()
@@ -110,20 +131,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     func spawnEnemy()
     {
-        let randomX = Int(arc4random_uniform(UInt32(Int(self.frame.maxX))))
-        enemy = (self.childNode(withName: "enemy")?.copy())! as? SKSpriteNode
-        // TODO: Spawn enemies within the frame bounds correctly
-        enemy?.position = CGPoint(
-            x: min(self.frame.minX + CGFloat(randomX) + (enemy?.size.width)!/2, self.frame.maxX - (enemy?.size.width)!/2),
-            y: self.frame.maxY
-        )
-        enemy?.physicsBody?.categoryBitMask = physicsCategory.enemy
-        enemy?.physicsBody?.contactTestBitMask = physicsCategory.projectile
-        self.moveEnemyToFloor()
-        self.addChild(enemy!)
+        let randomX = enemyXPositionRandomSource?.nextInt()
+        let e = (self.childNode(withName: "enemy")?.copy())! as? SKSpriteNode
+        e?.position = CGPoint(x: CGFloat(randomX!), y: self.frame.maxY)
+        e?.physicsBody?.categoryBitMask = physicsCategory.enemy
+        e?.physicsBody?.contactTestBitMask = physicsCategory.projectile
+        self.moveEnemyToFloor(enemyToMove: e!)
+        self.addChild(e!)
     }
     
-    func moveEnemyToFloor() {
+    func moveEnemyToFloor(enemyToMove: SKSpriteNode) {
         let moveTo = SKAction.moveTo(y: self.frame.minY - 10, duration: enemySpeed)
         let decrementScore = SKAction.run {
             if isAlive {
@@ -132,26 +149,24 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
         let destroy = SKAction.removeFromParent()
-        enemy?.run(SKAction.sequence([moveTo, decrementScore, destroy]))
+        enemyToMove.run(SKAction.sequence([moveTo, decrementScore, destroy]))
     }
     
     func spawnStar() {
-        let randomSize = Int(arc4random_uniform(4) + 2)
-        starSize = CGSize(width: randomSize, height: randomSize)
-        
-        let randomX = Int(arc4random_uniform(1000))
-        
+        let randomSize = starSizeRandomSource?.nextInt()
+        starSize = CGSize(width: randomSize!, height: randomSize!)
+        let randomX = starXPositionRandomSource!.nextInt()
         star = (self.childNode(withName: "star")?.copy())! as? SKSpriteNode
         star?.size = starSize!
-        star?.position = CGPoint(x: self.frame.minX + CGFloat(randomX), y: 1000)
+        star?.position = CGPoint(x: CGFloat(randomX), y: self.frame.maxY)
         star?.name = "starName"
         self.addChild(star!)
         self.moveStarToFloor(star: star!)
     }
     
     func moveStarToFloor (star: SKSpriteNode) {
-        let starSpeed = Int(arc4random_uniform(10))
-        let moveTo = SKAction.moveTo(y: self.frame.minY - 150, duration: 2 + Double(starSpeed) / 10.0)
+        let starSpeed = Double((starSpeedRandomSource?.nextInt())!)
+        let moveTo = SKAction.moveTo(y: self.frame.minY - 150, duration: starSpeed)
         let destroy = SKAction.removeFromParent()
         star.run(SKAction.sequence([moveTo, destroy]))
     }
@@ -182,9 +197,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let wait = SKAction.wait(forDuration: self.starSpawnRate)
         let spawn = SKAction.run({
             if isAlive == true {
-                self.spawnStar()
-                self.spawnStar()
-                self.spawnStar()
+                for _ in [0...self.starDensity] {
+                    self.spawnStar()
+                }
             }
         })
         let sequence = SKAction.sequence([wait, spawn])
